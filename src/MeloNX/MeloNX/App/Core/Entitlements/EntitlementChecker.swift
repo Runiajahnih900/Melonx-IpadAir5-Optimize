@@ -98,6 +98,10 @@ func checkAppEntitlement(_ ent: String) -> Bool {
 
     // Some signing paths expose equivalent capabilities with different entitlement keys.
     if ent == "com.apple.developer.kernel.increased-memory-limit" {
+        if ProcessInfo.processInfo.environment["HAS_TXM"] == "1" || ProcessInfo.processInfo.environment["DUAL_MAPPED_JIT"] == "1" {
+            return true
+        }
+
         return checkEntitlementValue(task: task, key: "com.apple.developer.kernel.extended-virtual-addressing") ||
             checkEntitlementValue(task: task, key: "com.apple.private.memorystatus")
     }
