@@ -1,0 +1,66 @@
+name: Build IPA
+
+on:
+  push:
+    branches:
+      - main
+      - "copilot/**"
+  workflow_dispatch:
+
+jobs:
+  build-ipa:
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout patch repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Clone upstream source (melonx/emu tag 2.3.1)
+        run: |
+          git clone --depth 1 --branch 2.3.1 https://git.ryujinx.app/melonx/emu.git upstream
+
+      - name: Apply patch overlay onto upstream source
+        run: |
+          rsync -a src/ upstream/src/
+          rsync -a tools/ upstream/tools/
+
+      - name: Build iOS dynamic library
+        run: |
+          dotnet publish -c Release -r ios-arm64 -p:ExtraDefineConstants=DISABLE_UPDATER upstream/src/Ryujinx.Headless.SDL2 --self-contained true
+          cp "upstream/src/Ryujinx.Headless.SDL2/bin/Release/net8.0/ios-arm64/native/Ryujinx.Headless.SDL2.dylib" "upstream/src/MeloNX/MeloNX/Dependencies/Dynamic Libraries/Ryujinx.Headless.SDL2.dylib"
+
+      - name: Build unsigned iOS app
+        run: |
+          cd upstream/src/MeloNX
+          xcodebuild \
+            -project MeloNX.xcodeproj \
+            -scheme MeloNX \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$PWD/build" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            build
+
+      - name: Package unsigned IPA
+        run: |
+          cd upstream/src/MeloNX
+          APP_PATH="$PWD/build/Build/Products/Release-iphoneos/MeloNX.app"
+          test -d "$APP_PATH"
+          mkdir -p ipa/Payload
+          cp -R "$APP_PATH" ipa/Payload/
+          cd ipa
+          ditto -c -k --sequesterRsrc --keepParent Payload MeloNX-unsigned.ipa
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MeloNX-unsigned-ipa
+          path: upstream/src/MeloNX/ipa/MeloNX-unsigned.ipa
+          if-no-files-found: error
