@@ -47,6 +47,24 @@ jobs:
           cd upstream/src/MeloNX
           xcodebuild -list -project MeloNX.xcodeproj
 
+          run_with_timeout() {
+            python3 - "$@" <<'PY'
+import subprocess
+import sys
+
+timeout_seconds = 600
+cmd = sys.argv[1:]
+
+process = subprocess.Popen(cmd)
+try:
+    process.wait(timeout=timeout_seconds)
+    sys.exit(process.returncode)
+except subprocess.TimeoutExpired:
+    process.kill()
+    sys.exit(124)
+PY
+          }
+
           IOS_ARGS=(
             -scheme MeloNX
             -configuration Release
@@ -82,12 +100,12 @@ jobs:
           BUILD_OUTPUT_SUBDIR="Release-iphoneos"
 
           set +e
-          xcodebuild -project MeloNX.xcodeproj "${IOS_ARGS[@]}" 2>&1 | tee "$RUNNER_TEMP/xcodebuild-project.log"
+          run_with_timeout xcodebuild -project MeloNX.xcodeproj "${IOS_ARGS[@]}" 2>&1 | tee "$RUNNER_TEMP/xcodebuild-project.log"
           BUILD_EXIT=${PIPESTATUS[0]}
 
           if [ "$BUILD_EXIT" -ne 0 ]; then
             echo "Project build failed, retrying with workspace..."
-            xcodebuild -workspace MeloNX.xcodeproj/project.xcworkspace "${IOS_ARGS[@]}" 2>&1 | tee "$RUNNER_TEMP/xcodebuild-workspace.log"
+            run_with_timeout xcodebuild -workspace MeloNX.xcodeproj/project.xcworkspace "${IOS_ARGS[@]}" 2>&1 | tee "$RUNNER_TEMP/xcodebuild-workspace.log"
             BUILD_EXIT=${PIPESTATUS[0]}
           fi
 
@@ -95,11 +113,11 @@ jobs:
             echo "iPhoneOS build failed, retrying with iOS Simulator target..."
             BUILD_OUTPUT_SUBDIR="Release-iphonesimulator"
 
-            xcodebuild -project MeloNX.xcodeproj "${SIM_ARGS[@]}" 2>&1 | tee "$RUNNER_TEMP/xcodebuild-sim-project.log"
+            run_with_timeout xcodebuild -project MeloNX.xcodeproj "${SIM_ARGS[@]}" 2>&1 | tee "$RUNNER_TEMP/xcodebuild-sim-project.log"
             BUILD_EXIT=${PIPESTATUS[0]}
 
             if [ "$BUILD_EXIT" -ne 0 ]; then
-              xcodebuild -workspace MeloNX.xcodeproj/project.xcworkspace "${SIM_ARGS[@]}" 2>&1 | tee "$RUNNER_TEMP/xcodebuild-sim-workspace.log"
+              run_with_timeout xcodebuild -workspace MeloNX.xcodeproj/project.xcworkspace "${SIM_ARGS[@]}" 2>&1 | tee "$RUNNER_TEMP/xcodebuild-sim-workspace.log"
               BUILD_EXIT=${PIPESTATUS[0]}
             fi
 
