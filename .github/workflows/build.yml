@@ -1,0 +1,42 @@
+name: Patch Build
+
+on:
+  push:
+    branches:
+      - main
+      - "copilot/**"
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-patch:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout patch repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Clone upstream source (melonx/emu tag 2.3.1)
+        run: |
+          git clone --depth 1 --branch 2.3.1 https://git.ryujinx.app/melonx/emu.git upstream
+
+      - name: Apply patch overlay onto upstream source
+        run: |
+          rsync -a src/ upstream/src/
+          rsync -a tools/ upstream/tools/
+
+      - name: Build patched projects
+        run: |
+          dotnet build upstream/src/ARMeilleure/ARMeilleure.csproj -c Release -v minimal
+          dotnet build upstream/src/Ryujinx.Graphics.Gpu/Ryujinx.Graphics.Gpu.csproj -c Release -v minimal
+          dotnet build upstream/src/Ryujinx.UI.Common/Ryujinx.UI.Common.csproj -c Release -v minimal
+
+      - name: Validate live-log relay script
+        run: |
+          python3 --version
+          python3 -m py_compile tools/live-log-relay/live_log_server.py
