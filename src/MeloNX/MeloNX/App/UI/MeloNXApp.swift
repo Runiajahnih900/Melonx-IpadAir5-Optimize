@@ -74,23 +74,12 @@ struct MeloNXApp: View {
             } else {
                 SetupView(isInSetup: $inSetup)
                     .onAppear() {
-                        let mp3 = MusicSelectorView.getMP3s().first(where: { $0.builtIn })
-                        MusicSelectorView.playMusic(mp3)
+                        // Keep startup/setup silent. Game audio remains unaffected.
+                        MusicSelectorView.stopMusic()
                         skippedSetup = false
                     }
                     .onDisappear {
-                        Timer.scheduledTimer(withTimeInterval: 0.1, repeats: false) { _ in
-                            let music = NativeSettingsManager.shared.backgroundMusic("").value
-                            MusicSelectorView.stopMusic()
-                            if music.isEmpty {
-                                if let mp3 = MusicSelectorView.getMP3s().last(where: { $0.builtIn }) {
-                                    MusicSelectorView.setMusicItemPath(mp3)
-                                    MusicSelectorView.playMusic()
-                                }
-                            } else {
-                                MusicSelectorView.playMusic()
-                            }
-                        }
+                        MusicSelectorView.stopMusic()
                     }
             }
         }
@@ -100,6 +89,10 @@ struct MeloNXApp: View {
         environment.forEach { env in
             env.set()
         }
+
+        // Disable app-level background music; keep only game audio.
+        NativeSettingsManager.shared.backgroundMusic("").value = ""
+        MusicSelectorView.stopMusic()
         
         EnvironmentVariable(string: "HAS_TXM", value: ProcessInfo.processInfo.hasTXM && !ProcessInfo.processInfo.isiOSAppOnMac ? "1" : "0").set()
 
