@@ -58,32 +58,6 @@ func checkAppEntitlements(_ ents: [String]) -> [String: Any] {
     return (entitlements as NSDictionary) as? [String: Any] ?? [:]
 }
 
-private func parseEntitlementValue(_ value: CFTypeRef?) -> Bool {
-    guard let value else {
-        return false
-    }
-
-    if let number = value as? NSNumber {
-        return number.boolValue
-    }
-
-    if let bool = value as? Bool {
-        return bool
-    }
-
-    if let string = value as? NSString {
-        let normalized = String(string).trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return normalized == "1" || normalized == "true" || normalized == "yes"
-    }
-
-    return false
-}
-
-private func checkEntitlementValue(task: SecTaskRef, key: String) -> Bool {
-    let value = SecTaskCopyValueForEntitlement(task, key as NSString, nil)
-    return parseEntitlementValue(value)
-}
-
 func checkAppEntitlement(_ ent: String) -> Bool {
     guard let task = SecTaskCreateFromSelf(nil) else {
         return false
@@ -92,18 +66,49 @@ func checkAppEntitlement(_ ent: String) -> Bool {
         releaseSecTask(task)
     }
 
-    if checkEntitlementValue(task: task, key: ent) {
+    func parseEntitlementValue(_ value: CFTypeRef?) -> Bool {
+        guard let value else {
+            return false
+        }
+
+        if let number = value as? NSNumber {
+            return number.boolValue
+        }
+
+        if let bool = value as? Bool {
+            return bool
+        }
+
+        if let string = value as? NSString {
+            let normalized = String(string).trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            return normalized == "1" || normalized == "true" || normalized == "yes"
+        }
+
+        return false
+    }
+
+    func checkEntitlementValue(_ key: String) -> Bool {
+        let value = SecTaskCopyValueForEntitlement(task, key as NSString, nil)
+        return parseEntitlementValue(value)
+    }
+
+    if checkEntitlementValue(ent) {
         return true
     }
 
-    // Some signing paths expose equivalent capabilities with different entitlement keys.
     if ent == "com.apple.developer.kernel.increased-memory-limit" {
+        if ProcessInfo.processInfo.hasTXM {
+            return true
+        }
+
         if ProcessInfo.processInfo.environment["HAS_TXM"] == "1" || ProcessInfo.processInfo.environment["DUAL_MAPPED_JIT"] == "1" {
             return true
         }
 
-        return checkEntitlementValue(task: task, key: "com.apple.developer.kernel.extended-virtual-addressing") ||
-            checkEntitlementValue(task: task, key: "com.apple.private.memorystatus")
+        return checkEntitlementValue("dynamic-codesigning") ||
+            checkEntitlementValue("com.apple.security.cs.allow-jit") ||
+            checkEntitlementValue("com.apple.developer.kernel.extended-virtual-addressing") ||
+            checkEntitlementValue("com.apple.private.memorystatus")
     }
 
     return false
