@@ -29,6 +29,11 @@ jobs:
           rsync -a src/ upstream/src/
           rsync -a tools/ upstream/tools/
 
+      - name: Verify memory entitlement is enabled
+        run: |
+          /usr/libexec/PlistBuddy -c "Print :com.apple.developer.kernel.increased-memory-limit" "upstream/src/MeloNX/MeloNX/MeloNX.entitlements"
+          /usr/libexec/PlistBuddy -c "Print :com.apple.developer.kernel.increased-memory-limit" "upstream/src/MeloNX/MeloNX/MeloNX-extended.entitlements"
+
       - name: Build iOS dynamic library
         run: |
           dotnet publish -c Release -r ios-arm64 -p:ExtraDefineConstants=DISABLE_UPDATER upstream/src/Ryujinx.Headless.SDL2 --self-contained true
