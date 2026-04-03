@@ -34,19 +34,46 @@ jobs:
           dotnet publish -c Release -r ios-arm64 -p:ExtraDefineConstants=DISABLE_UPDATER upstream/src/Ryujinx.Headless.SDL2 --self-contained true
           cp "upstream/src/Ryujinx.Headless.SDL2/bin/Release/net8.0/ios-arm64/native/Ryujinx.Headless.SDL2.dylib" "upstream/src/MeloNX/MeloNX/Dependencies/Dynamic Libraries/Ryujinx.Headless.SDL2.dylib"
 
+      - name: Prepare Xcode toolchain
+        run: |
+          sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-path
+
       - name: Build unsigned iOS app
         run: |
           cd upstream/src/MeloNX
-          xcodebuild \
-            -project MeloNX.xcodeproj \
-            -scheme MeloNX \
-            -configuration Release \
-            -sdk iphoneos \
-            -destination 'generic/platform=iOS' \
-            -derivedDataPath "$PWD/build" \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
+
+          COMMON_ARGS=(
+            -scheme MeloNX
+            -configuration Release
+            -sdk iphoneos
+            -destination 'generic/platform=iOS'
+            -derivedDataPath "$PWD/build"
+            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_REQUIRED=NO
+            CODE_SIGN_IDENTITY=""
+            EXPANDED_CODE_SIGN_IDENTITY=""
+            EXPANDED_CODE_SIGN_IDENTITY_NAME=""
+            PROVISIONING_PROFILE_SPECIFIER=""
+            DEVELOPMENT_TEAM=""
             build
+          )
+
+          set +e
+          xcodebuild -project MeloNX.xcodeproj "${COMMON_ARGS[@]}" 2>&1 | tee "$RUNNER_TEMP/xcodebuild-project.log"
+          BUILD_EXIT=${PIPESTATUS[0]}
+
+          if [ "$BUILD_EXIT" -ne 0 ]; then
+            echo "Project build failed, retrying with workspace..."
+            xcodebuild -workspace MeloNX.xcodeproj/project.xcworkspace "${COMMON_ARGS[@]}" 2>&1 | tee "$RUNNER_TEMP/xcodebuild-workspace.log"
+            BUILD_EXIT=${PIPESTATUS[0]}
+          fi
+
+          if [ "$BUILD_EXIT" -ne 0 ]; then
+            echo "::error::xcodebuild failed for both project and workspace"
+            exit "$BUILD_EXIT"
+          fi
 
       - name: Package unsigned IPA
         run: |
